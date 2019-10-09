@@ -86,7 +86,7 @@ uniform float fovy;
 * @param {int} mIdx : Array index of material that the plane is made of
 * @param {Intersection (out)} intersect : The intersection
 *
-* @returns {float} t : Parameter t so that point of intersection is ray.P0 + t*ray.V
+* @returns {float} t : Parameter t so that point of intersection is ray.p0 + t*ray.v
 */
 float rayIntersectPlane(Ray ray, vec3 n, vec3 p, int mIdx, out Intersection intersect) {
     float denom = dot(ray.v, n);
@@ -122,7 +122,7 @@ float rayIntersectPlane(Ray ray, vec3 n, vec3 p, int mIdx, out Intersection inte
 * @param {mat3} N: The normal transformation associated to M
 * @param {Intersection (out)} intersect : The intersection
 *
-* @returns {float} t : Parameter t so that point of intersection is ray.P0 + t*ray.V
+* @returns {float} t : Parameter t so that point of intersection is ray.p0 + t*ray.v
 */
 float rayIntersectTriangle(Ray ray, vec3 a, vec3 b, vec3 c,
                             int mIdx, mat4 MInv, mat3 N,
@@ -149,7 +149,7 @@ float rayIntersectTriangle(Ray ray, vec3 a, vec3 b, vec3 c,
 * @param {mat3} N: The normal transformation associated to M
 * @param {Intersection (out)} intersect : The intersection
 *
-* @returns {float} t : Parameter t so that point of intersection is ray.P0 + t*ray.V
+* @returns {float} t : Parameter t so that point of intersection is ray.p0 + t*ray.v
 */
 float rayIntersectSphere(Ray ray, vec3 c, float r,
                             int mIdx, mat4 MInv, mat3 N,
@@ -181,7 +181,7 @@ float rayIntersectSphere(Ray ray, vec3 c, float r,
 * @param {mat3} N: The normal transformation associated to M
 * @param {Intersection (out)} intersect : The intersection
 *
-* @returns {float} t : Parameter t so that point of intersection is ray.P0 + t*ray.V
+* @returns {float} t : Parameter t so that point of intersection is ray.p0 + t*ray.v
 */
 float rayIntersectBox(Ray ray, float W, float H, float L,
                         vec3 c, int mIdx, mat4 MInv, mat3 N,
@@ -209,7 +209,7 @@ float rayIntersectBox(Ray ray, float W, float H, float L,
 * @param {mat3} N: The normal transformation associated to M
 * @param {Intersection (out)} intersect : The intersection
 *
-* @returns {float} t : Parameter t so that point of intersection is ray.P0 + t*ray.V
+* @returns {float} t : Parameter t so that point of intersection is ray.p0 + t*ray.v
 */
 float rayIntersectCylinder(Ray ray, vec3 c, float r, float h,
                             int mIdx, mat4 MInv, mat3 N,
@@ -236,7 +236,7 @@ float rayIntersectCylinder(Ray ray, vec3 c, float r, float h,
 * @param {mat3} N: The normal transformation associated to M
 * @param {Intersection (out)} intersect : The intersection
 *
-* @returns {float} t : Parameter t so that point of intersection is ray.P0 + t*ray.V
+* @returns {float} t : Parameter t so that point of intersection is ray.p0 + t*ray.v
 */
 float rayIntersectCone(Ray ray, vec3 c, float r, float h,
                             int mIdx, mat4 MInv, mat3 N,
@@ -263,7 +263,7 @@ float rayIntersectCone(Ray ray, vec3 c, float r, float h,
 * @param {Ray} ray : The ray in world coordinates
 * @param {Intersection (out)} intersect : The intersection
 *
-* @returns {float} t : Parameter t so that point of intersection is ray.P0 + t*ray.V
+* @returns {float} t : Parameter t so that point of intersection is ray.p0 + t*ray.v
 */
 float rayIntersectScene(Ray ray, out Intersection intersect){return INF;}
 
