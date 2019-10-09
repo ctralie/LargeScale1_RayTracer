@@ -2,7 +2,7 @@ precision mediump float;
 
 #define INF 1.0e+12
 #define EPS 1.0e-3 // Reflect/shadow/transmission ray offset
-#define MAX_RECURSION 3 // Maximum depth for rays
+#define MAX_RECURSION 1 // Maximum depth for rays
 #define MAX_LIGHTS 10
 #define MAX_MATERIALS 10
 #define M_PI 3.1415926535897932384626433832795
