@@ -46,8 +46,6 @@ struct Intersection {
 ********************************************/
 // Uniforms set from Javascript that are constant
 // over all fragments
-uniform float canvas_height;
-uniform float canvas_width;
 uniform int numObjects;
 uniform int numLights;
 uniform Light lights[MAX_LIGHTS];

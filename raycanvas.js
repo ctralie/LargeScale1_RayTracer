@@ -17,7 +17,6 @@ const CHECK_NEAREST_INTERSECTION_SRC = "\tif(tCurr < tMin) {\n" +
                                         "\t\ttMin = tCurr;\n"+
                                         "\t\tintersect = intersectCurr;\n" +
                                         "\t}\n";
-const MAX_LIGHTS = 10
 const MAX_MATERIALS = 10
 
 function vec3ToGLSLStr(v, k) {
