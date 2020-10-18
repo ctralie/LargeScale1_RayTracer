@@ -47,37 +47,53 @@ function matToGLSLStr(m, k) {
 /**
  * 
  * @param {DOM Element} glcanvas Handle to HTML where the glcanvas resides
- * @param {SceneCanvas} glslcanvas Pointer to glsl canvas
+ * @param {SceneCanvas} glslScene Pointer to glsl scene
  */
-function RayCanvas(glcanvas, glslcanvas) {
-    // Initialize a WebGL handle and keyboard/mouse callbacks
-    BaseCanvas(glcanvas); 
-    // Store a pointer to the glsl canvas for looking up scene information
-    glcanvas.glslcanvas = glslcanvas;
-    glcanvas.vertexShader = null;
-    glcanvas.fragmentShader = null;
+class RayCanvas extends BaseCanvas {
+    constructor(glcanvas, glslScene, shadersrelpath) {
+        // Initialize a WebGL handle and keyboard/mouse callbacks
+        super(glcanvas, shadersrelpath, true);
+        // Store a pointer to the glsl canvas for looking up scene information
+        this.glslScene = glslScene;
+        glcanvas.vertexShader = null;
+        glcanvas.fragmentShader = null;
+
+        glcanvas.removeEventListener('mousemove', this.clickerDragged);
+        glcanvas.addEventListener('mousemove', this.clickerDraggedSync.bind(this));
+        glcanvas.removeEventListener('touchmove', this.clickerDragged);
+        glcanvas.addEventListener('touchmove', this.clickerDraggedSync.bind(this));
+        
+        this.rayMenu = glslScene.gui.addFolder('Ray Tracing Options');
+        this.orthographic = false;
+        let canvas = this;
+        this.rayMenu.add(this, 'orthographic').onChange(function() {
+            requestAnimFrame(canvas.repaint.bind(canvas));
+        });
+
+        this.setupInitialBuffers();
+        this.setupShaders();
+    }
 
     /**
      * A function that sends over information about the camera,
      * lights, and materials
      */
-    glcanvas.updateUniforms = function() {
+    updateUniforms() {
+        let glcanvas = this.glcanvas;
         let shader = glcanvas.shader;
-        let gl = glcanvas.gl;
-        gl.uniform1f(shader.u_canvas_width, glcanvas.clientWidth);
-        gl.uniform1f(shader.u_canvas_height, glcanvas.clientHeight);
+        let gl = this.gl;
         let showLights = 0;
-        if (glcanvas.glslcanvas.showLights) {
+        if (this.glslScene.showLights) {
             showLights = 1;
         }
         gl.uniform1i(shader.u_showLights, showLights);
-        gl.uniform1f(shader.u_beaconRadius, BEACON_SIZE);
+        gl.uniform1f(shader.u_beaconRadius, SceneCanvas.BEACON_SIZE);
         let orthographic = 0;
-        if (glcanvas.orthographic) {
+        if (this.orthographic) {
             orthographic = 1;
         }
         gl.uniform1i(shader.u_orthographic, orthographic);
-        let camera = glcanvas.glslcanvas.camera;
+        let camera = this.glslScene.camera;
         if (!(camera === null)) {
             gl.uniform3fv(shader.u_eye, camera.pos);
             gl.uniform3fv(shader.u_right, camera.right);
@@ -85,7 +101,7 @@ function RayCanvas(glcanvas, glslcanvas) {
             gl.uniform1f(shader.u_fovx, camera.fovx);
             gl.uniform1f(shader.u_fovy, camera.fovy);
         }
-        let scene = glcanvas.glslcanvas.scene;
+        let scene = this.glslScene.scene;
         if (!(scene === null)) {
             if (scene.lights === null) {
                 console.log("Warning: No lights declared in scene");
@@ -110,7 +126,7 @@ function RayCanvas(glcanvas, glslcanvas) {
             else {
                 let numMaterials = Math.min(MAX_MATERIALS, scene.materialsArr.length);
                 gl.uniform1i(shader.u_numMaterials, numMaterials);
-                for (i = 0; i < numMaterials; i++) {
+                for (let i = 0; i < numMaterials; i++) {
                     gl.uniform3fv(shader.u_materials[i].kd, scene.materialsArr[i].kd);
                     gl.uniform3fv(shader.u_materials[i].ks, scene.materialsArr[i].ks);
                     gl.uniform3fv(shader.u_materials[i].ka, scene.materialsArr[i].ka);
@@ -131,20 +147,19 @@ function RayCanvas(glcanvas, glslcanvas) {
      * once at the beginning of initializing this object, 
      * since they never change
      */
-    glcanvas.setupInitialBuffers = function() {
-        let gl = glcanvas.gl;
-        glcanvas.fragmentSrcPre = BlockLoader.loadTxt("raytracer.frag");
-
+    setupInitialBuffers() {
+        let glcanvas = this.glcanvas;
+        let gl = this.gl;
         glcanvas.vertexShader = getShader(gl, BASIC_VERTEXSHADER_SRC, "vertex");
     
         // Setup four corners of the image in a vertex buffer
         glcanvas.positionBuffer = gl.createBuffer();
-        const positions = new Float32Array([-1.0,  1.0,
+        glcanvas.positionBuffer.positions = new Float32Array([-1.0,  1.0,
                                             1.0,  1.0,
                                             -1.0, -1.0,
                                             1.0, -1.0]);
         gl.bindBuffer(gl.ARRAY_BUFFER, glcanvas.positionBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, glcanvas.positionBuffer.positions, gl.STATIC_DRAW);
     
         // Setup 2 triangles connecting the vertices so that there
         // are solid shaded regions
@@ -163,80 +178,78 @@ function RayCanvas(glcanvas, glslcanvas) {
      * @param {string} rayIntersectSceneStr The code that defines the rayIntersectScene string
      * @param {boolean} verbose Whether to print the final shader code to the console
      */
-    glcanvas.setupShaders = function(rayIntersectSceneStr, verbose) {
+    setupShaders(rayIntersectSceneStr, verbose) {
         if (rayIntersectSceneStr === undefined) {
             rayIntersectSceneStr = DEFAULT_RAY_INTERSECT_SCENE_SRC;
         }
         if (verbose === undefined) {
             verbose = false;
         }
-        let gl = glcanvas.gl;
+        let glcanvas = this.glcanvas;
+        let gl = this.gl;
         if (!(glcanvas.fragmentShader === null)) {
             gl.deleteShader(glcanvas.fragmentShader);
         }
-        if (rayIntersectSceneStr === undefined) {
-            rayIntersectSceneStr = "";
-        }
-        let tic = performance.now();
-        let s = glcanvas.fragmentSrcPre.replace(DEFAULT_RAY_INTERSECT_SCENE_SRC, rayIntersectSceneStr);
-        if (verbose) {
-            console.log(s);
-        }
-        glcanvas.fragmentShader = getShader(gl, s, "fragment");
 
-        glcanvas.shader = gl.createProgram();
-        let shader = glcanvas.shader;
-        gl.attachShader(shader, glcanvas.vertexShader);
-        gl.attachShader(shader, glcanvas.fragmentShader);
-        gl.linkProgram(shader);
-        if (!gl.getProgramParameter(shader, gl.LINK_STATUS)) {
-            alert("Could not initialize raytracing shader");
-        }
-        shader.name = "raytracer";
-        console.log("Elapsed Time Ray Shader Compilation: " + (performance.now()-tic) + " milliseconds");
-
-        shader.positionLocation = gl.getAttribLocation(shader, "a_position");
-        gl.enableVertexAttribArray(shader.positionLocation);
-        gl.bindBuffer(gl.ARRAY_BUFFER, glcanvas.positionBuffer);
-        gl.vertexAttribPointer(shader.positionLocation, 2, gl.FLOAT, false, 0, 0);
-
-        // Setup uniforms
-        shader.u_canvas_width = gl.getUniformLocation(shader, "canvas_width");
-        shader.u_canvas_height = gl.getUniformLocation(shader, "canvas_height");
-        shader.u_numObjects = gl.getUniformLocation(shader, "numObjects");
-        shader.u_numLights = gl.getUniformLocation(shader, "numLights");
-        shader.u_numMaterials = gl.getUniformLocation(shader, "numMaterials");
-        shader.u_showLights = gl.getUniformLocation(shader, "showLights");
-        shader.u_beaconRadius = gl.getUniformLocation(shader, "beaconRadius");
-        shader.u_orthographic = gl.getUniformLocation(shader, "orthographic");
-        shader.u_eye = gl.getUniformLocation(shader, "eye");
-        shader.u_right = gl.getUniformLocation(shader, "right");
-        shader.u_up = gl.getUniformLocation(shader, "up");
-        shader.u_fovx = gl.getUniformLocation(shader, "fovx");
-        shader.u_fovy = gl.getUniformLocation(shader, "fovy");
-        shader.u_lights = [];
-        for (let i = 0; i < MAX_LIGHTS; i++) {
-            let light = {
-                pos: gl.getUniformLocation(shader, "lights["+i+"].pos"),
-                color: gl.getUniformLocation(shader, "lights["+i+"].color"),
-                atten: gl.getUniformLocation(shader, "lights["+i+"].atten"),
-                towards: gl.getUniformLocation(shader, "lights["+i+"].towards"),
-                angle: gl.getUniformLocation(shader, "lights["+i+"].angle")
-            };
-            shader.u_lights.push(light);
-        }
-        shader.u_materials = [];
-        for (let i = 0; i < MAX_MATERIALS; i++) {
-            let material = {
-                kd: gl.getUniformLocation(shader, "materials["+i+"].kd"),
-                ks: gl.getUniformLocation(shader, "materials["+i+"].ks"),
-                ka: gl.getUniformLocation(shader, "materials["+i+"].ka"),
-                shininess: gl.getUniformLocation(shader, "materials["+i+"].shininess"),
-                refraction: gl.getUniformLocation(shader, "materials["+i+"].refraction"),
-                special: gl.getUniformLocation(shader, "materials["+i+"].special")
+        $.get("raytracer.frag", function(fragmentSrcPre) {
+            let tic = performance.now();
+            let s = fragmentSrcPre.replace(DEFAULT_RAY_INTERSECT_SCENE_SRC, rayIntersectSceneStr);
+            if (verbose) {
+                console.log(s);
             }
-            shader.u_materials.push(material);
-        }
+            glcanvas.fragmentShader = getShader(gl, s, "fragment");
+    
+            glcanvas.shader = gl.createProgram();
+            let shader = glcanvas.shader;
+            gl.attachShader(shader, glcanvas.vertexShader);
+            gl.attachShader(shader, glcanvas.fragmentShader);
+            gl.linkProgram(shader);
+            if (!gl.getProgramParameter(shader, gl.LINK_STATUS)) {
+                alert("Could not initialize raytracing shader");
+            }
+            shader.name = "raytracer";
+            console.log("Elapsed Time Ray Shader Compilation: " + (performance.now()-tic) + " milliseconds");
+            
+            shader.positionLocation = gl.getAttribLocation(shader, "a_position");
+            gl.enableVertexAttribArray(shader.positionLocation);
+            gl.bindBuffer(gl.ARRAY_BUFFER, glcanvas.positionBuffer);
+            gl.vertexAttribPointer(shader.positionLocation, 2, gl.FLOAT, false, 0, 0);
+    
+            // Setup uniforms
+            shader.u_numLights = gl.getUniformLocation(shader, "numLights");
+            shader.u_numMaterials = gl.getUniformLocation(shader, "numMaterials");
+            shader.u_showLights = gl.getUniformLocation(shader, "showLights");
+            shader.u_beaconRadius = gl.getUniformLocation(shader, "beaconRadius");
+            shader.u_orthographic = gl.getUniformLocation(shader, "orthographic");
+            shader.u_eye = gl.getUniformLocation(shader, "eye");
+            shader.u_right = gl.getUniformLocation(shader, "right");
+            shader.u_up = gl.getUniformLocation(shader, "up");
+            shader.u_fovx = gl.getUniformLocation(shader, "fovx");
+            shader.u_fovy = gl.getUniformLocation(shader, "fovy");
+            shader.u_lights = [];
+            for (let i = 0; i < MAX_LIGHTS; i++) {
+                let light = {
+                    pos: gl.getUniformLocation(shader, "lights["+i+"].pos"),
+                    color: gl.getUniformLocation(shader, "lights["+i+"].color"),
+                    atten: gl.getUniformLocation(shader, "lights["+i+"].atten"),
+                    towards: gl.getUniformLocation(shader, "lights["+i+"].towards"),
+                    angle: gl.getUniformLocation(shader, "lights["+i+"].angle")
+                };
+                shader.u_lights.push(light);
+            }
+            shader.u_materials = [];
+            for (let i = 0; i < MAX_MATERIALS; i++) {
+                let material = {
+                    kd: gl.getUniformLocation(shader, "materials["+i+"].kd"),
+                    ks: gl.getUniformLocation(shader, "materials["+i+"].ks"),
+                    ka: gl.getUniformLocation(shader, "materials["+i+"].ka"),
+                    shininess: gl.getUniformLocation(shader, "materials["+i+"].shininess"),
+                    refraction: gl.getUniformLocation(shader, "materials["+i+"].refraction"),
+                    special: gl.getUniformLocation(shader, "materials["+i+"].special")
+                }
+                shader.u_materials.push(material);
+            }
+        });
     }
 
     /**
@@ -248,7 +261,8 @@ function RayCanvas(glcanvas, glslcanvas) {
      * @param {int} k The number of floating point digits to output to the shader
      *                for each floating point number
      */
-    glcanvas.updateSceneRec = function(node, transform, k) {
+    updateSceneRec(node, transform, k) {
+        let glcanvas = this.glcanvas;
         if (k === undefined) {
             k = 5;
         }
@@ -392,7 +406,7 @@ function RayCanvas(glcanvas, glslcanvas) {
         });
         if ('children' in node) {
             for (let i = 0; i < node.children.length; i++) {
-                retStr += glcanvas.updateSceneRec(node.children[i], nextTransform) + "\n";
+                retStr += this.updateSceneRec(node.children[i], nextTransform) + "\n";
             }
         }
         return retStr;
@@ -401,8 +415,10 @@ function RayCanvas(glcanvas, glslcanvas) {
     /**
      * Setup and compile a new fragment shader based on objects in the scene
      */
-    glcanvas.updateScene = function() {
-        let c = glcanvas.glslcanvas;
+    updateScene() {
+        let canvas = this;
+        let glcanvas = this.glcanvas;
+        let c = this.glslScene;
 
         let scene = c.scene;
         if (scene === null) {
@@ -421,7 +437,6 @@ function RayCanvas(glcanvas, glslcanvas) {
                 i += 1;
             }
         }
-
         // Step 1: Setup handlers for menus that will repaint
         // when light, camera, and material properties are changed, 
         // assuming this canvas is active
@@ -436,7 +451,7 @@ function RayCanvas(glcanvas, glslcanvas) {
                         controller.onChange(function(v) {
                             otherHandler(v);
                             if (glcanvas.active) {
-                                requestAnimFrame(glcanvas.repaint);
+                                requestAnimFrame(canvas.repaint.bind(canvas));
                             }
                         });
                     });
@@ -454,70 +469,59 @@ function RayCanvas(glcanvas, glslcanvas) {
         let m = glMatrix.mat4.create();
         glcanvas.meshIdx = 0;
         scene.children.forEach(function(node) {
-            rayIntersectSceneStr += glcanvas.updateSceneRec(node, m) + "\n";
+            rayIntersectSceneStr += canvas.updateSceneRec(node, m) + "\n";
         });
 
         rayIntersectSceneStr += "\treturn tMin;\n}";
-        glcanvas.setupShaders(rayIntersectSceneStr, true);
+        this.setupShaders(rayIntersectSceneStr, true);
     }
 
-    glcanvas.repaint = function() {
-        let camera = glcanvas.glslcanvas.camera;
+    repaint() {
+        let glcanvas = this.glcanvas;
+        let camera = this.glslScene.camera;
         let shader = glcanvas.shader;
-        let gl = glcanvas.gl;
+        let gl = this.gl;
         gl.useProgram(shader);
-        glcanvas.updateUniforms();
+        this.updateUniforms();
 
         // Draw two triangles to fill in all the pixels
+        console.log(gl.getParameter(gl.ARRAY_BUFFER_BINDING));
+        console.log(gl.getParameter(gl.ELEMENT_ARRAY_BUFFER_BINDING));
         gl.drawElements(gl.TRIANGLES, glcanvas.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
 
         // Redraw if walking
         let thisTime = (new Date()).getTime();
-        let dt = (thisTime - glcanvas.lastTime)/1000.0;
-        glcanvas.lastTime = thisTime;
-        if (glcanvas.movelr != 0 || glcanvas.moveud != 0 || glcanvas.movefb != 0) {
-            camera.translate(0, 0, glcanvas.movefb, glcanvas.glslcanvas.walkspeed*dt);
-            camera.translate(0, glcanvas.moveud, 0, glcanvas.glslcanvas.walkspeed*dt);
-            camera.translate(glcanvas.movelr, 0, 0, glcanvas.glslcanvas.walkspeed*dt);
+        let dt = (thisTime - this.lastTime)/1000.0;
+        this.lastTime = thisTime;
+        if (this.movelr != 0 || this.moveud != 0 || this.movefb != 0) {
+            camera.translate(0, 0, this.movefb, this.glslScene.walkspeed*dt);
+            camera.translate(0, this.moveud, 0, this.glslScene.walkspeed*dt);
+            camera.translate(this.movelr, 0, 0, this.glslScene.walkspeed*dt);
             camera.position = vecToStr(camera.pos);
-            requestAnimFrame(glcanvas.repaint);
+            requestAnimFrame(this.repaint.bind(this));
         }
-
     }
 
     /**
      * A function to move the camera associated to the glsl canvas
      */
-    glcanvas.clickerDraggedSync = function(evt) {
+    clickerDraggedSync(evt) {
         evt.preventDefault();
         let mousePos = this.getMousePos(evt);
         let dX = mousePos.X - this.lastX;
         let dY = mousePos.Y - this.lastY;
         this.lastX = mousePos.X;
         this.lastY = mousePos.Y;
-        let camera = glcanvas.glslcanvas.camera;
+        let camera = this.glslScene.camera;
         if (!(camera === null)) {
-            if (glcanvas.dragging) {
+            if (this.dragging) {
                 //Rotate camera by mouse dragging
                 camera.rotateLeftRight(-dX);
                 camera.rotateUpDown(-dY);
-                requestAnimFrame(glcanvas.repaint);
+                requestAnimFrame(this.repaint.bind(this));
             }
         }
         return false;
     }
-    glcanvas.removeEventListener('mousemove', glcanvas.clickerDragged);
-    glcanvas.addEventListener('mousemove', glcanvas.clickerDraggedSync);
-    glcanvas.removeEventListener('touchmove', glcanvas.clickerDragged);
-    glcanvas.addEventListener('touchmove', glcanvas.clickerDraggedSync);
-
-    glcanvas.rayMenu = glcanvas.glslcanvas.gui.addFolder('Ray Tracing Options');
-    glcanvas.orthographic = false;
-    glcanvas.rayMenu.add(glcanvas, 'orthographic').onChange(function() {
-        requestAnimFrame(glcanvas.repaint);
-    });
-
-
-    glcanvas.setupInitialBuffers();
-    glcanvas.setupShaders();
+    
 }
