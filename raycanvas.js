@@ -485,8 +485,6 @@ class RayCanvas extends BaseCanvas {
         this.updateUniforms();
 
         // Draw two triangles to fill in all the pixels
-        console.log(gl.getParameter(gl.ARRAY_BUFFER_BINDING));
-        console.log(gl.getParameter(gl.ELEMENT_ARRAY_BUFFER_BINDING));
         gl.drawElements(gl.TRIANGLES, glcanvas.indexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
 
         // Redraw if walking

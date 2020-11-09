@@ -67,7 +67,7 @@
 
     let raycanvas = document.getElementById("RayCanvas");
     raycanvas.addEventListener("contextmenu", function(e){ e.stopPropagation(); e.preventDefault(); return false; }); //Need this to disable the menu that pops up on right clicking
-    let rayScene = new RayCanvas(raycanvas, glslScene, "ggslac/shaders/");
+    let rayScene = new RayCanvas(raycanvas, glslScene);
 
     let activeScene = glslScene;
 
